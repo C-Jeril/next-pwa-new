@@ -1,3 +1,4 @@
+// fallback.js
 'use strict'
 
 self.fallback = async request => {

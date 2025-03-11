@@ -1,10 +1,11 @@
+// build-custom-worker.js
 'use strict'
 
-const path = require('path')
-const fs = require('fs')
-const webpack = require('webpack')
-const { CleanWebpackPlugin } = require('clean-webpack-plugin')
-const TerserPlugin = require('terser-webpack-plugin')
+import path from 'path'
+import fs from 'fs'
+import webpack from 'webpack'
+import { CleanWebpackPlugin } from 'clean-webpack-plugin'
+import TerserPlugin from 'terser-webpack-plugin'
 
 const buildCustomWorker = ({ id, basedir, customWorkerDir, destdir, plugins, minify }) => {
   let workerDir = undefined

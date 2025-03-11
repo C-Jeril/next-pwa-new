@@ -1,14 +1,15 @@
+// index.js
 'use strict'
 
-const path = require('path')
-const fs = require('fs')
-const globby = require('globby')
-const crypto = require('crypto')
-const { CleanWebpackPlugin } = require('clean-webpack-plugin')
-const WorkboxPlugin = require('workbox-webpack-plugin')
-const defaultCache = require('./cache')
-const buildCustomWorker = require('./build-custom-worker')
-const buildFallbackWorker = require('./build-fallback-worker')
+import path from 'path'
+import fs from 'fs'
+import globby from 'globby'
+import crypto from 'crypto'
+import { CleanWebpackPlugin } from 'clean-webpack-plugin'
+import WorkboxPlugin from 'workbox-webpack-plugin'
+import defaultCache from './cache'
+import buildCustomWorker from './build-custom-worker'
+import buildFallbackWorker from './build-fallback-worker'
 
 const getRevision = file => crypto.createHash('md5').update(fs.readFileSync(file)).digest('hex')
 
@@ -24,11 +25,8 @@ module.exports =
           config: { distDir = '.next', pageExtensions = ['tsx', 'ts', 'jsx', 'js', 'mdx'], experimental = {} }
         } = options
 
-        let basePath = options.config.basePath
-        if (!basePath) basePath = '/'
+        let basePath = options.config.basePath || '/'
 
-        // For workbox configurations:
-        // https://developers.google.com/web/tools/workbox/reference-docs/latest/module-workbox-webpack-plugin.GenerateSW
         const {
           disable = false,
           register = true,
@@ -222,7 +220,7 @@ module.exports =
                 if (dev && !asset.name.startsWith('static/runtime/')) {
                   return true
                 }
-                if (experimental.modern /* modern */) {
+                if (experimental.modern) {
                   if (asset.name.endsWith('.module.js')) {
                     return false
                   }
@@ -248,8 +246,8 @@ module.exports =
                     if (key.startsWith(config.output.publicPath)) {
                       key = m.url.substring(config.output.publicPath.length)
                     }
-                    const assset = compilation.assetsInfo.get(key)
-                    m.revision = assset ? assset.contenthash || buildId : buildId
+                    const asset = compilation.assetsInfo.get(key)
+                    m.revision = asset ? asset.contenthash || buildId : buildId
                   }
                   m.url = m.url.replace(/\[/g, '%5B').replace(/\]/g, '%5D')
                   return m
