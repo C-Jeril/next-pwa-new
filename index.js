@@ -1,15 +1,27 @@
 // index.js
-'use strict'
+'use strict';
 
-import path from 'path'
-import fs from 'fs'
-import { globby } from 'globby'
-import crypto from 'crypto'
-import { CleanWebpackPlugin } from 'clean-webpack-plugin'
-import WorkboxPlugin from 'workbox-webpack-plugin'
-import defaultCache from './cache.js'
-import buildCustomWorker from './build-custom-worker.js'
-import buildFallbackWorker from './build-fallback-worker.js'
+// 如果 self 不存在，则在 Node 环境中将其指向 global
+if (typeof self === 'undefined') {
+  global.self = global;
+}
+
+// 计算 __dirname（ESM 下没有内置 __dirname）
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+import path from 'path';
+import fs from 'fs';
+import { globby } from 'globby'; // globby v14+ 使用命名导出
+import crypto from 'crypto';
+import { CleanWebpackPlugin } from 'clean-webpack-plugin';
+import WorkboxPlugin from 'workbox-webpack-plugin';
+import defaultCache from './cache.js';
+import buildCustomWorker from './build-custom-worker.js';
+import buildFallbackWorker from './build-fallback-worker.js';
+
 
 // 根据文件内容生成 revision 哈希
 const getRevision = file =>
@@ -215,18 +227,39 @@ export default (pluginOptions = {}) => (nextConfig = {}) =>
       )
 
       // 自动将 register.js 注入到 main.js 的入口中
-      const registerJs = path.join(__dirname, 'register.js')
-      const entry = config.entry
-      config.entry = () =>
-        entry().then(entries => {
-          if (entries['main.js'] && !entries['main.js'].includes(registerJs)) {
-            entries['main.js'].unshift(registerJs)
-          }
-          return entries
-        })
+const registerJs = path.join(__dirname, 'register.js');
+if (fs.existsSync(registerJs)) {
+  const entry = config.entry;
+  config.entry = () =>
+    entry().then(entries => {
+      if (entries['main.js'] && !entries['main.js'].includes(registerJs)) {
+        entries['main.js'].unshift(registerJs);
+      }
+      return entries;
+    });
+} else {
+  console.warn('> [PWA] register.js not found; skipping auto registration.');
+}
 
-      if (!options.isServer) {
-        const _dest = path.join(options.dir, dest)
+
+if (!options.isServer) {
+  const _dest = path.join(options.dir, dest);
+
+    // 根据需要将起始 URL 添加到 manifestEntries 中……
+    if (cacheStartUrl) {
+      if (!dynamicStartUrl) {
+        manifestEntries.push({
+          url: basePath,
+          revision: buildId
+        });
+      } else if (typeof dynamicStartUrlRedirect === 'string' && dynamicStartUrlRedirect.length > 0) {
+        manifestEntries.push({
+          url: dynamicStartUrlRedirect,
+          revision: buildId
+        });
+      }
+    }
+
 
         // 构建自定义 worker（等待编译完成）
         let customWorkerScriptName
@@ -269,27 +302,40 @@ export default (pluginOptions = {}) => (nextConfig = {}) =>
           })
         )
 
+  // 如果处于开发模式，则跳过复杂的 precaching 逻辑
+  if (dev) {
+    console.log('> [PWA] Development mode: caching is disabled; using NetworkOnly strategy.');
+    ignoreURLParametersMatching.push(/ts/);
+    runtimeCaching = [
+      {
+        urlPattern: /.*/i,
+        handler: 'NetworkOnly',
+        options: { cacheName: 'dev' }
+      }
+    ];
+  } else {
+    // 生产环境：继续构建 precaching manifest、fallback worker 等
         // 生成 manifest 条目，支持增量构建
-        let manifestEntries
-        if (enableIncrementalManifest) {
-          manifestEntries = await generateManifestEntriesIncremental({
-            basePath,
-            sw,
-            publicExcludes,
-            additionalManifestEntries,
-            buildId,
-            cacheFilePath: manifestCacheFile
-          })
-        } else {
-          manifestEntries = await generateManifestEntriesAsync({
-            basePath,
-            sw,
-            publicExcludes,
-            additionalManifestEntries,
-            buildId
-          })
-        }
-
+    let manifestEntries;
+    if (enableIncrementalManifest) {
+      manifestEntries = await generateManifestEntriesIncremental({
+        basePath,
+        sw,
+        publicExcludes,
+        additionalManifestEntries,
+        buildId,
+        cacheFilePath: manifestCacheFile
+      });
+    } else {
+      manifestEntries = await generateManifestEntriesAsync({
+        basePath,
+        sw,
+        publicExcludes,
+        additionalManifestEntries,
+        buildId
+      });
+    }
+   }
         // 如果需要缓存起始 URL，则添加到 manifestEntries 中
         if (cacheStartUrl) {
           if (!dynamicStartUrl) {
@@ -306,35 +352,35 @@ export default (pluginOptions = {}) => (nextConfig = {}) =>
         }
 
         // 处理 fallback worker（等待编译完成）
-        let _fallbacks = fallbacks
-        try {
-          if (_fallbacks) {
-            const res = await buildFallbackWorker({
-              id: buildId,
-              fallbacks,
-              basedir: options.dir,
-              destdir: _dest,
-              minify: !dev,
-              pageExtensions
-            })
-            if (res) {
-              _fallbacks = res.fallbacks
-              importScripts.unshift(res.name)
-              res.precaches.forEach(route => {
-                if (!manifestEntries.find(entry => entry.url.startsWith(route))) {
-                  manifestEntries.push({
-                    url: route,
-                    revision: buildId
-                  })
-                }
-              })
-            } else {
-              _fallbacks = undefined
+    let _fallbacks = fallbacks;
+    try {
+      if (_fallbacks) {
+        const res = await buildFallbackWorker({
+          id: buildId,
+          fallbacks,
+          basedir: options.dir,
+          destdir: _dest,
+          minify: !dev,
+          pageExtensions
+        });
+        if (res) {
+          _fallbacks = res.fallbacks;
+          importScripts.unshift(res.name);
+          res.precaches.forEach(route => {
+            if (!manifestEntries.find(entry => entry.url.startsWith(route))) {
+              manifestEntries.push({
+                url: route,
+                revision: buildId
+              });
             }
-          }
-        } catch (err) {
-          console.error('Error building fallback worker:', err)
+          });
+        } else {
+          _fallbacks = undefined;
         }
+      }
+    } catch (err) {
+      console.error('Error building fallback worker:', err);
+    }
 
         // 合并用户自定义的 manifestTransforms 与默认转换函数
         const combinedManifestTransforms = disableDefaultManifestTransform
