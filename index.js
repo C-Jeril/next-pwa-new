@@ -3,13 +3,13 @@
 
 import path from 'path'
 import fs from 'fs'
-import globby from 'globby'
+import { globby } from 'globby'
 import crypto from 'crypto'
 import { CleanWebpackPlugin } from 'clean-webpack-plugin'
 import WorkboxPlugin from 'workbox-webpack-plugin'
-import defaultCache from './cache'
-import buildCustomWorker from './build-custom-worker'
-import buildFallbackWorker from './build-fallback-worker'
+import defaultCache from './cache.js'
+import buildCustomWorker from './build-custom-worker.js'
+import buildFallbackWorker from './build-fallback-worker.js'
 
 // 根据文件内容生成 revision 哈希
 const getRevision = file =>
